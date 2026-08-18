@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://13.55.162.161:8080';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '';
 
 const getDefaultHeaders = (token) => {
   const headers = { 'Content-Type': 'application/json' };

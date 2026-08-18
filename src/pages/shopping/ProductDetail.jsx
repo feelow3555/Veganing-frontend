@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { PRODUCTS } from "../../data/products";
+import { getProduct } from "../../api/backend";
 import { Card, CardContent } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
 import { useCart } from "../../context/CartContext.jsx";
@@ -9,12 +9,28 @@ function ProductDetail() {
     const { productId } = useParams();
     const navigate = useNavigate();
     const { addToCart } = useCart();
-    const product = PRODUCTS.find(
-        (p) => String(p.id) === String(productId)
-    );
+    const [product, setProduct] = useState(null);
+    const [loading, setLoading] = useState(true);
 
     const [quantity, setQuantity] = useState(1);
     const [showPopup, setShowPopup] = useState(false);
+
+    useEffect(() => {
+        const fetchProduct = async () => {
+            setLoading(true);
+            try {
+                const res = await getProduct(productId);
+                const p = res.data;
+                setProduct(p ? { ...p, image: p.imageUrl || p.image } : null);
+            } catch (error) {
+                console.error("상품 조회 실패:", error);
+                setProduct(null);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProduct();
+    }, [productId]);
 
     const handleBuyNow = () => {
         if (!product) return;
@@ -41,6 +57,14 @@ function ProductDetail() {
         });
     };
     
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-white flex items-center justify-center">
+                <p className="text-lg text-gray-600">상품 정보를 불러오는 중...</p>
+            </div>
+        );
+    }
+
     if (!product) {
         return (
             <div className="min-h-screen bg-white flex items-center justify-center">

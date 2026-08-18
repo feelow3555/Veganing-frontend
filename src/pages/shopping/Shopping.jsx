@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import SearchBar from './components/SearchBar';
 import CategoryTabs from './components/CategoryTabs';
 import ProductCard from './components/ProductCard';
@@ -8,22 +8,46 @@ import freeDel from "../../assets/shopping/freeDel.svg";
 import shield from "../../assets/shopping/shield.svg";
 import point from "../../assets/shopping/point.svg";
 import gift from "../../assets/shopping/gift.svg";
-import { PRODUCTS } from "../../data/products";
+import { getProducts } from "../../api/backend";
 
 function Shopping() {
     const [sortOrder, setSortOrder] = useState("default");
     const [category, setCategory] = useState("ALL");
     const [searchKeyword, setSearchKeyword] = useState("");
     const [currentPage, setCurrentPage] = useState(1);
+    const [products, setProducts] = useState([]);
+    const [loading, setLoading] = useState(true);
 
     const pageSize = 8;
 
-            const { pageProducts, hasMore, totalCount } = useMemo(() => {
-        const keyword = searchKeyword.trim().toLowerCase();
-        let baseList = PRODUCTS;
+    useEffect(() => {
+        const fetchProducts = async () => {
+            setLoading(true);
+            try {
+                const res = await getProducts(0, 200);
+                const items = res.data?.content || res.data || [];
+                const normalized = items.map((p) => ({
+                    ...p,
+                    image: p.imageUrl || p.image,
+                    mainCategory: p.category,
+                }));
+                setProducts(normalized);
+            } catch (error) {
+                console.error("상품 목록 조회 실패:", error);
+                setProducts([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchProducts();
+    }, []);
 
-        if (keyword === "") {   
-            baseList = PRODUCTS.filter((p) => {
+    const { pageProducts, hasMore, totalCount } = useMemo(() => {
+        const keyword = searchKeyword.trim().toLowerCase();
+        let baseList = products;
+
+        if (keyword === "") {
+            baseList = products.filter((p) => {
                 if (category === "ALL") return true;
                 return p.mainCategory === category;   
             });
@@ -65,7 +89,7 @@ function Shopping() {
             hasMore: hasMoreLocal,
             totalCount: total
         };
-    }, [category, searchKeyword, sortOrder, currentPage]);
+    }, [products, category, searchKeyword, sortOrder, currentPage]);
 
 
     const handleSearch = (keyword) => {
@@ -86,8 +110,6 @@ function Shopping() {
     const handlePageChange = (nextPage) => {
         setCurrentPage(nextPage);
     };
-
-    const loading = false; 
 
     const benefits = [
         { icon: freeDel, title: '무료 배송', desc: '5만원 이상 주문시' },

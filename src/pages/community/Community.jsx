@@ -143,7 +143,7 @@ const Community = () => {
 
                 setIsLoggedIn(true);
                 const response = await getCurrentChallenge(token);
-                setCurrentChallenge(response.userChallenge);
+                setCurrentChallenge(response.data);
             } catch (error) {
                 console.error("챌린지 조회 실패:", error);
                 setCurrentChallenge(null);
@@ -192,8 +192,8 @@ const Community = () => {
                     console.log("프로필 응답 전체:", JSON.stringify(profileResponse, null, 2));
                     console.log("profileResponse.user:", profileResponse?.user);
 
-                    if (profileResponse && profileResponse.user) {
-                        const user = profileResponse.user;
+                    if (profileResponse && profileResponse.data) {
+                        const user = profileResponse.data;
                         console.log("사용자 데이터:", user);
                         setUserProfile(user);
                         console.log("프로필 설정 완료!");
@@ -223,8 +223,8 @@ const Community = () => {
 
                 try {
                     const statsResponse = await getChallengeStats(token);
-                    if (statsResponse && statsResponse.stats) {
-                        setUserStats(statsResponse.stats);
+                    if (statsResponse && statsResponse.data) {
+                        setUserStats(statsResponse.data);
                     }
                 } catch (error) {
                     console.error("통계 조회 실패:", error);
@@ -249,27 +249,25 @@ const Community = () => {
         const fetchPosts = async () => {
             try {
                 setFeedLoading(true);
-                const response = await getPosts({ limit: 50 });
-
-                if (response.posts) {
-                    const formattedPosts = response.posts.map((post) => ({
-                        id: post.id,
-                        username: post.author?.nickname || "익명",
-                        level: `Lv.${post.author?.level || 1}`,
-                        location: "서울 강남구",
-                        time: formatTimeAgo(post.createdAt),
-                        content: post.content,
-                        hashtags: post.content?.match(/#[\w가-힣]+/g) || [],
-                        likes: post.likes || 0,
-                        comments: post.commentCount || 0,
-                        avatar: post.author?.profileImage || null,
-                        imageUrl: post.imageUrl,
-                        category: post.category,
-                        buttonIcon: "https://c.animaapp.com/mh1f3wszSXzzY1/img/button.svg",
-                        authorId: post.author?.id || null
-                    }));
-                    setFeedPosts(formattedPosts);
-                }
+                const response = await getPosts({ page: 0, size: 50 });
+                const posts = response.data?.content || [];
+                const formattedPosts = posts.map((post) => ({
+                    id: post.id,
+                    username: post.nickname || "익명",
+                    level: "Lv.1",
+                    location: "서울",
+                    time: formatTimeAgo(post.createdAt),
+                    content: post.content || post.title,
+                    hashtags: (post.content || "")?.match(/#[\w가-힣]+/g) || [],
+                    likes: post.likeCount || 0,
+                    comments: post.commentCount || 0,
+                    avatar: null,
+                    imageUrl: post.imageUrl,
+                    category: post.category,
+                    title: post.title,
+                    authorId: null
+                }));
+                setFeedPosts(formattedPosts);
             } catch (error) {
                 console.error("게시글 목록 조회 실패:", error);
 

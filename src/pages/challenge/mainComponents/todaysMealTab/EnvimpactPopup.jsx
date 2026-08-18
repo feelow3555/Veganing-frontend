@@ -8,7 +8,7 @@ import fourthImage from '../../../../assets/popup/fourth.png';
 import fifthImage from '../../../../assets/popup/fifth.png';
 
 function EnvImpactPopup({ isOpen, onClose, data }) {
-    const { addCarbonData } = useCarbonHistory();
+    
     const navigate = useNavigate();
     const [showNotification, setShowNotification] = useState(false);
     
@@ -33,11 +33,6 @@ function EnvImpactPopup({ isOpen, onClose, data }) {
 
     // 좋아요 버튼 클릭 - 데이터 저장
     const handleLike = () => {
-        addCarbonData({
-            co2Saved: data?.co2Saved || 0,
-            veganRate: data?.veganRate || 0,
-            mealCount: data?.mealCount || 0
-        });
         
         setShowNotification(true);
     };

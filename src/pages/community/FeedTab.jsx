@@ -39,45 +39,46 @@ const FeedTab = ({
             return;
         }
 
-        const isLiked = likedPosts.has(postId);
+        const wasLiked = likedPosts.has(postId);
+        const optimisticLikes = wasLiked ? Math.max(0, currentLikes - 1) : currentLikes + 1;
+
+        // 클릭 즉시 로컬 상태 반영 + 중복 클릭 방지
+        setLikingPosts(prev => new Set(prev).add(postId));
+        setLikedPosts(prev => {
+            const next = new Set(prev);
+            if (wasLiked) next.delete(postId);
+            else next.add(postId);
+            return next;
+        });
+        if (onPostUpdate) {
+            onPostUpdate(postId, { likes: optimisticLikes });
+        }
 
         try {
-            setLikingPosts(prev => new Set(prev).add(postId));
-            if (isLiked) {
+            const response = await likePost(postId, token);
+            const data = response.data || {};
+
+            // 서버 응답으로 최종 동기화
+            if (onPostUpdate && data.likeCount !== undefined) {
+                onPostUpdate(postId, { likes: data.likeCount });
+            }
+            if (data.liked !== undefined) {
                 setLikedPosts(prev => {
                     const next = new Set(prev);
-                    next.delete(postId);
+                    if (data.liked) next.add(postId);
+                    else next.delete(postId);
                     return next;
                 });
-
-                if (onPostUpdate) {
-                    onPostUpdate(postId, { likes: Math.max(0, currentLikes - 1) });
-                }
-
-            } else {
-
-                setLikedPosts(prev => new Set(prev).add(postId));
-
-                const response = await likePost(postId, token);
-
-                if (onPostUpdate && response.likes !== undefined) {
-                    onPostUpdate(postId, { likes: response.likes });
-                } else if (onPostUpdate) {
-                    onPostUpdate(postId, { likes: currentLikes + 1 });
-                }
             }
         } catch (error) {
             console.error("좋아요 처리 실패:", error);
-            if (isLiked) {
-                setLikedPosts(prev => new Set(prev).add(postId));
-            } else {
-                setLikedPosts(prev => {
-                    const next = new Set(prev);
-                    next.delete(postId);
-                    return next;
-                });
-            }
-
+            // 실패 시 롤백
+            setLikedPosts(prev => {
+                const next = new Set(prev);
+                if (wasLiked) next.add(postId);
+                else next.delete(postId);
+                return next;
+            });
             if (onPostUpdate) {
                 onPostUpdate(postId, { likes: currentLikes });
             }
@@ -110,12 +111,11 @@ const FeedTab = ({
                     const response = await getComments(postId);
                     console.log("댓글 조회 응답:", response);
 
-                    if (response.comments) {
-                        setComments(prev => ({ ...prev, [postId]: response.comments }));
+                    if (response.data) {
+                        setComments(prev => ({ ...prev, [postId]: response.data }));
                     }
                 } catch (error) {
                     console.error("댓글 조회 실패:", error);
-                    console.error("요청 URL:", `http://localhost:3000/api/community/posts/${postId}/comments`);
                     alert(`댓글을 불러오는데 실패했습니다: ${error.message || "알 수 없는 오류"}`);
                 } finally {
                     setCommentsLoading(prev => ({ ...prev, [postId]: false }));
@@ -142,10 +142,10 @@ const FeedTab = ({
 
             const response = await createComment(postId, { content: content.trim() }, token);
 
-            if (response.comment) {
+            if (response.data) {
                 setComments(prev => ({
                     ...prev,
-                    [postId]: [...(prev[postId] || []), response.comment]
+                    [postId]: [...(prev[postId] || []), response.data]
                 }));
                 if (onPostUpdate) {
                     const currentCount = feedPosts.find(p => p.id === postId)?.comments || 0;

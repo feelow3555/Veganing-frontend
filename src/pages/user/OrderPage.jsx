@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import {
   Card,
@@ -8,19 +8,33 @@ import {
   CardDescription,
 } from "../../components/ui/card";
 import { Button } from "../../components/ui/button";
+import { createOrder, getToken } from "../../api/backend";
+import { useCart } from "../../context/CartContext.jsx";
 
 export const OrderPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const orderState = location.state;
+  const { reloadCart } = useCart();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [form, setForm] = useState({
+    recipientName: "",
+    recipientPhone: "",
+    address: "",
+    addressDetail: "",
+    memo: "",
+  });
+
+  const handleFormChange = (e) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
 
   if (!orderState || !orderState.items || orderState.items.length === 0) {
     return (
       <div className="min-h-screen bg-white py-8 px-4">
         <div className="max-w-5xl mx-auto">
-          <h1 className="text-3xl font-semibold text-gray-800 mb-6">
-            주문/결제
-          </h1>
+          <h1 className="text-3xl font-semibold text-gray-800 mb-6">주문/결제</h1>
           <Card className="rounded-3xl shadow-lg">
             <CardContent className="py-10 text-center">
               <p className="text-gray-600 mb-6">
@@ -41,6 +55,42 @@ export const OrderPage = () => {
 
   const { items, totalPrice, shippingFee, finalAmount } = orderState;
 
+  const handlePayment = async () => {
+    const token = getToken();
+    if (!token) {
+      alert("로그인이 필요합니다.");
+      navigate("/login");
+      return;
+    }
+
+    if (!form.recipientName || !form.recipientPhone || !form.address) {
+      alert("수령인 이름, 연락처, 주소는 필수입니다.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await createOrder(
+        {
+          recipientName: form.recipientName,
+          recipientPhone: form.recipientPhone,
+          address: form.address,
+          addressDetail: form.addressDetail,
+          memo: form.memo,
+        },
+        token
+      );
+      await reloadCart();
+      alert("주문이 완료되었습니다!");
+      navigate("/mypage");
+    } catch (error) {
+      console.error("주문 실패:", error);
+      alert(`주문에 실패했습니다: ${error.message || "알 수 없는 오류"}`);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white py-8 px-4">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -59,94 +109,63 @@ export const OrderPage = () => {
           <div className="space-y-6">
             <Card className="rounded-3xl border-2 border-teal-50 shadow-sm">
               <CardHeader>
-                <CardTitle className="text-gray-800">주문자 정보</CardTitle>
-                <CardDescription>
-                  기본 정보는 실제 회원 정보와 연동된다고 가정합니다.
-                </CardDescription>
+                <CardTitle className="text-gray-800">배송지 정보</CardTitle>
+                <CardDescription>상품을 받으실 주소를 입력해주세요.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">
-                      이름
-                    </label>
+                    <label className="block text-sm text-gray-600 mb-1">수령인 이름 *</label>
                     <input
                       type="text"
-                      className="w-full rounded-2xl border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
-                      defaultValue="홍길동"
+                      name="recipientName"
+                      value={form.recipientName}
+                      onChange={handleFormChange}
+                      className="w-full rounded-2xl border border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
+                      placeholder="수령인 이름"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm text-gray-600 mb-1">
-                      연락처
-                    </label>
+                    <label className="block text-sm text-gray-600 mb-1">연락처 *</label>
                     <input
                       type="text"
-                      className="w-full rounded-2xl border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
-                      defaultValue="010-1234-5678"
+                      name="recipientPhone"
+                      value={form.recipientPhone}
+                      onChange={handleFormChange}
+                      className="w-full rounded-2xl border border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
+                      placeholder="010-0000-0000"
                     />
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-600 mb-1">
-                    이메일
-                  </label>
-                  <input
-                    type="email"
-                    className="w-full rounded-2xl border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
-                    defaultValue="vegan@example.com"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="rounded-3xl border-2 border-teal-50 shadow-sm">
-              <CardHeader>
-                <CardTitle className="text-gray-800">배송지 정보</CardTitle>
-                <CardDescription>
-                  상품을 받으실 주소를 입력해주세요.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex gap-2">
+                  <label className="block text-sm text-gray-600 mb-1">주소 *</label>
                   <input
                     type="text"
-                    className="flex-1 rounded-2xl border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
-                    placeholder="우편번호"
-                  />
-                  <Button
-                    variant="outline"
-                    className="rounded-2xl border-teal-200"
-                    type="button"
-                  >
-                    우편번호 찾기
-                  </Button>
-                </div>
-                <div>
-                  <input
-                    type="text"
-                    className="w-full rounded-2xl border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2 mb-2"
+                    name="address"
+                    value={form.address}
+                    onChange={handleFormChange}
+                    className="w-full rounded-2xl border border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2 mb-2"
                     placeholder="기본 주소"
                   />
                   <input
                     type="text"
-                    className="w-full rounded-2xl border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
+                    name="addressDetail"
+                    value={form.addressDetail}
+                    onChange={handleFormChange}
+                    className="w-full rounded-2xl border border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
                     placeholder="상세 주소"
                   />
                 </div>
-
-                <div className="flex items-center gap-2 mt-2">
+                <div>
+                  <label className="block text-sm text-gray-600 mb-1">배송 메모</label>
                   <input
-                    id="defaultAddress"
-                    type="checkbox"
-                    className="w-4 h-4 rounded border-teal-300 text-teal-500 focus:ring-teal-400"
+                    type="text"
+                    name="memo"
+                    value={form.memo}
+                    onChange={handleFormChange}
+                    className="w-full rounded-2xl border border-gray-200 focus:border-teal-400 focus:ring-teal-400 text-sm px-3 py-2"
+                    placeholder="배송 시 요청사항"
                   />
-                  <label
-                    htmlFor="defaultAddress"
-                    className="text-sm text-gray-600"
-                  >
-                    기본 배송지로 설정
-                  </label>
                 </div>
               </CardContent>
             </Card>
@@ -154,9 +173,7 @@ export const OrderPage = () => {
             <Card className="rounded-3xl border-2 border-teal-50 shadow-sm">
               <CardHeader>
                 <CardTitle className="text-gray-800">결제 수단</CardTitle>
-                <CardDescription>
-                  원하시는 결제 방식을 선택하세요.
-                </CardDescription>
+                <CardDescription>원하시는 결제 방식을 선택하세요.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -170,11 +187,6 @@ export const OrderPage = () => {
                     간편 결제
                   </button>
                 </div>
-
-                <div className="text-xs text-gray-500">
-                  실제 과제에서는 결제 API 연동 대신, 주문 정보 저장까지만
-                  구현해도 충분합니다.
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -183,9 +195,7 @@ export const OrderPage = () => {
             <Card className="rounded-3xl border-2 border-teal-100 bg-gradient-to-br from-teal-50/60 to-emerald-50/60">
               <CardHeader>
                 <CardTitle className="text-gray-800">주문 상품</CardTitle>
-                <CardDescription>
-                  장바구니에서 선택한 상품만 주문됩니다.
-                </CardDescription>
+                <CardDescription>장바구니에서 선택한 상품만 주문됩니다.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3 max-h-72 overflow-y-auto pr-1">
                 {items.map((item) => (
@@ -195,19 +205,11 @@ export const OrderPage = () => {
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-2xl overflow-hidden bg-gray-100 flex-shrink-0">
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       </div>
                       <div>
-                        <div className="text-sm text-gray-800">
-                          {item.name}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          수량 {item.quantity}개
-                        </div>
+                        <div className="text-sm text-gray-800">{item.name}</div>
+                        <div className="text-xs text-gray-500">수량 {item.quantity}개</div>
                       </div>
                     </div>
                     <div className="text-sm text-gray-800">
@@ -229,34 +231,19 @@ export const OrderPage = () => {
                 </div>
                 <div className="flex items-center justify-between text-sm text-gray-600">
                   <span>배송비</span>
-                  <span>
-                    {shippingFee === 0
-                      ? "무료"
-                      : shippingFee.toLocaleString() + "원"}
-                  </span>
+                  <span>{shippingFee === 0 ? "무료" : shippingFee.toLocaleString() + "원"}</span>
                 </div>
                 <div className="h-px bg-teal-200 my-1" />
                 <div className="flex items-center justify-between text-lg text-gray-900">
                   <span>총 결제금액</span>
-                  <span className="text-teal-600 font-semibold">
-                    {finalAmount.toLocaleString()}원
-                  </span>
+                  <span className="text-teal-600 font-semibold">{finalAmount.toLocaleString()}원</span>
                 </div>
-
-                <div className="text-xs text-gray-500 mt-2">
-                  주문 버튼 클릭 시, 실제 결제가 이뤄지는 대신
-                  <br />
-                  주문 완료 페이지로 이동하거나 알림만 띄우도록 구현할 수
-                  있습니다.
-                </div>
-
                 <Button
                   className="w-full h-14 mt-4 rounded-2xl bg-gradient-to-r from-teal-400 to-emerald-400 hover:from-teal-500 hover:to-emerald-500 text-white shadow-lg hover:shadow-xl transition-all"
-                  onClick={() => {
-                    alert("주문이 완료되었습니다!");
-                  }}
+                  disabled={isSubmitting}
+                  onClick={handlePayment}
                 >
-                  {finalAmount.toLocaleString()}원 결제하기
+                  {isSubmitting ? "주문 처리 중..." : `${finalAmount.toLocaleString()}원 결제하기`}
                 </Button>
               </CardContent>
             </Card>

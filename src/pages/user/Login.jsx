@@ -40,20 +40,18 @@ function Login({ onSignupClick, onLoginSuccess }) {
                 password: password,
             });
 
-            if (response.token) {
-                saveToken(response.token);
-            }
-            if (response.user) {
-                saveUser(response.user);
+            if (response.data) {
+                const { accessToken, ...userData } = response.data;
+                saveToken(accessToken);
+                saveUser(userData);
                 localStorage.setItem("auth", JSON.stringify({ 
-                    email: response.user.email, 
-                    name: response.user.nickname || response.user.name 
+                    email: userData.email, 
+                    name: userData.nickname || userData.name 
                 }));
-                
                 setAuth({
-                    email: response.user.email,
-                    name: response.user.nickname || response.user.name,
-                    id: response.user.id,
+                    email: userData.email,
+                    name: userData.nickname || userData.name,
+                    id: userData.id,
                 });
             }
 

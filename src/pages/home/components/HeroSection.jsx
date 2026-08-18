@@ -5,7 +5,7 @@ import { ArrowRight, Calendar } from "lucide-react";
 
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { getHomeHeroData } from "../../../api/backend";
+import { getHomeHeroData, getToken } from "../../../api/backend";
 
 // 🔥 백엔드 없을 때 사용할 더미데이터
 const fallbackHeroData = {
@@ -39,15 +39,16 @@ export default function HeroSection() {
     useEffect(() => {
         const fetchHeroData = async () => {
             try {
-                const token = localStorage.getItem("token");
+                const token = getToken();
                 const response = await getHomeHeroData(token);
+                const data = response.data || {};
 
                 // 성공 시 API 데이터 사용 / 일부 null 이면 fallback 병합
                 setHeroData({
-                    images: response.images?.length ? response.images : fallbackHeroData.images,
-                    participants: response.participants ?? fallbackHeroData.participants,
-                    successRate: response.successRate ?? fallbackHeroData.successRate,
-                    satisfaction: response.satisfaction ?? fallbackHeroData.satisfaction,
+                    images: data.images?.length ? data.images : fallbackHeroData.images,
+                    participants: data.participants ?? fallbackHeroData.participants,
+                    successRate: data.successRate ?? fallbackHeroData.successRate,
+                    satisfaction: data.satisfaction ?? fallbackHeroData.satisfaction,
                 });
             } catch (err) {
                 console.error("HeroSection 데이터 조회 실패: 더미 데이터 사용", err);
@@ -72,7 +73,7 @@ export default function HeroSection() {
     }, [heroData.images]);
 
     return (
-        <section className="w-full min-h-[90vh] flex items-center relative mt-20">
+        <section className="w-full  flex items-center relative mt-20">
             <div className="container mx-auto grid grid-cols-1 md:grid-cols-2 gap-12 px-6 py-16 items-center">
 
                 {/* LEFT TEXT */}

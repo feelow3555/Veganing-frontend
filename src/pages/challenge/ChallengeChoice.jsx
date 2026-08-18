@@ -28,7 +28,7 @@ function ChallengeChoice() {
                 // 진행 중인 챌린지 확인
                 const response = await getCurrentChallenge(token);
 
-                if (response && response.userChallenge) {
+                if (response && response.data) {
                     console.log('이미 진행 중인 챌린지가 있습니다. 메인 페이지로 이동합니다.');
                     navigate('/challenge/main/meal');
                 }
@@ -60,21 +60,18 @@ function ChallengeChoice() {
             if (!quitExisting) {
                 try {
                     const existingResponse = await getCurrentChallenge(token);
-                    if (existingResponse && existingResponse.userChallenge) {
-                        // 사용자에게 선택지 제공
+                    if (existingResponse && existingResponse.data) {
                         const shouldQuit = window.confirm(
                             `이미 진행 중인 챌린지가 있습니다.\n\n` +
-                            `현재 챌린지: ${existingResponse.userChallenge.title}\n` +
-                            `진행률: ${existingResponse.userChallenge.progress}%\n\n` +
+                            `현재 챌린지: ${existingResponse.data.type}\n` +
                             `기존 챌린지를 포기하고 새 챌린지를 시작하시겠습니까?\n\n` +
                             `[확인] = 기존 챌린지 포기 후 새 챌린지 시작\n` +
                             `[취소] = 기존 챌린지 계속하기`
                         );
 
                         if (shouldQuit) {
-                            // 기존 챌린지 포기
                             try {
-                                await quitChallenge(existingResponse.userChallenge.id, token);
+                                await quitChallenge(existingResponse.data.id, token);
                                 console.log('기존 챌린지 포기 완료');
                             } catch (quitError) {
                                 console.error('기존 챌린지 포기 실패:', quitError);
@@ -108,23 +105,23 @@ function ChallengeChoice() {
             // veganType 변환 (백엔드 ENUM 형식으로 변환)
             // 백엔드 허용 값: 'vegan', 'lacto', 'ovo', 'lacto-ovo', 'pescatarian', 'flexitarian'
             const veganTypeMap = {
-                '플렉시테리언(Flexitarian)': 'flexitarian',
-                '페스코(Pesco)': 'pescatarian',
-                '락토-오보(Lacto-ovo)': 'lacto-ovo',
-                '오보(Ovo)': 'ovo',
-                '락토(Lacto)': 'lacto',
-                '비건': 'vegan',
-                // 백엔드 ENUM에 없는 타입들은 가장 가까운 값으로 매핑
-                '폴로(Pollo)': 'flexitarian', // pollo는 ENUM에 없으므로 flexitarian으로
-                '프루테리언': 'vegan' // fruitarian은 ENUM에 없으므로 vegan으로
+                '플렉시테리언(Flexitarian)': 'FLEXITARIAN',
+                '페스코(Pesco)': 'PESCO',
+                '락토-오보(Lacto-ovo)': 'LACTO_OVO',
+                '오보(Ovo)': 'OVO',
+                '락토(Lacto)': 'LACTO',
+                '비건': 'VEGAN',
+                '폴로(Pollo)': 'POLLO',
+                '프루테리언': 'FRUITARIAN',
+                '폴로-페스코(Pollo-Pesco)': 'POLLO_PESCO',
             };
-            
+
             const backendVeganType = veganTypeMap[veganType];
             if (!backendVeganType) {
-                console.warn(`⚠️ 알 수 없는 veganType: ${veganType}, 기본값 'flexitarian' 사용`);
+                console.warn(`⚠️ 알 수 없는 veganType: ${veganType}, 기본값 'FLEXITARIAN' 사용`);
             }
-            
-            const finalVeganType = backendVeganType || 'flexitarian';
+
+            const finalVeganType = backendVeganType || 'FLEXITARIAN';
             
             console.log('📋 veganType 변환:', {
                 원본: veganType,
@@ -133,9 +130,9 @@ function ChallengeChoice() {
 
             // 전송할 데이터 확인
             const challengeData = {
-                veganType: finalVeganType,
-                period: periodDays,
-                goal: goal
+                type: finalVeganType,
+                duration: periodDays,
+                purpose: goal
             };
             
             console.log('📤 챌린지 시작 요청 데이터:', {
@@ -191,8 +188,8 @@ function ChallengeChoice() {
                     // 기존 챌린지 찾아서 포기
                     try {
                         const existingResponse = await getCurrentChallenge(token);
-                        if (existingResponse && existingResponse.userChallenge) {
-                            await quitChallenge(existingResponse.userChallenge.id, token);
+                        if (existingResponse && existingResponse.data) {
+                            await quitChallenge(existingResponse.data.id, token);
                             // 재시도
                             handleStartChallenge(true);
                             return;

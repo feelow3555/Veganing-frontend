@@ -1,221 +1,172 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-
-const STORAGE_KEY = 'challenge_meal_index_state';
-
-// 더미 레시피 식재료
-const DUMMY_RECIPE = {
-    id: 'dummy-quinoa-stir-fry',
-    title: '퀴노아와 채소 볶음',
-    ingredients: [
-        { name: '퀴노아', amount: '1컵', unit: '(조리된 것)' },
-        { name: '브로콜리', amount: '1컵', unit: '(잘라서)' },
-        { name: '당근', amount: '1개', unit: '(얇게 썬 것)' },
-        { name: '파프리카', amount: '1개', unit: '(채썬 것)' },
-        { name: '올리브 오일', amount: '1큰술', unit: '' },
-        { name: '간장', amount: '1큰술', unit: '' },
-        { name: '생강가루', amount: '약간', unit: '' }
-    ],
-    recommendReason: '퀴노아는 완전 단백질이 포함되어 있어 영양가가 높습니다.'
-};
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { getMealHistory, getProducts, getToken } from '../../../../api/backend';
+import ProductCard from '../../../shopping/components/ProductCard';
 
 const ShoppingTab = () => {
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const keyword = (searchParams.get('keyword') || '').trim();
+
     const [requiredIngredients, setRequiredIngredients] = useState([]);
+    const [products, setProducts] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [selectedIngredient, setSelectedIngredient] = useState(null);
 
-    // localStorage에서 식단 가져오기
-    const getMealsFromStorage = () => {
+    // 분석 완료된 식단들에서 필요한 식재료 집계
+    const loadIngredients = async () => {
+        const token = getToken();
+        if (!token) return [];
+
         try {
-            const stored = localStorage.getItem(STORAGE_KEY);
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                return parsed || [];
+            const res = await getMealHistory(token);
+            const history = res.data || [];
+            const doneMeals = history.filter((meal) => meal.status === 'DONE');
+
+            const ingredientMap = new Map();
+            for (const meal of doneMeals) {
+                const ingredients = meal.ingredients || [];
+                for (const ing of ingredients) {
+                    const key = (ing.name || '').trim();
+                    if (!key) continue;
+
+                    const existing = ingredientMap.get(key);
+                    if (existing) {
+                        existing.amount += ing.amount_g || 0;
+                        if (meal.foodName && !existing.sources.includes(meal.foodName)) {
+                            existing.sources.push(meal.foodName);
+                        }
+                    } else {
+                        ingredientMap.set(key, {
+                            id: ingredientMap.size + 1,
+                            name: key,
+                            amount: ing.amount_g || 0,
+                            sources: meal.foodName ? [meal.foodName] : [],
+                            priority: '보통'
+                        });
+                    }
+                }
             }
+
+            return Array.from(ingredientMap.values())
+                .map((ing) => ({
+                    ...ing,
+                    amount: `${ing.amount}g`,
+                    reason: ing.sources.length > 0 ? ing.sources.join(', ') : '분석된 식단'
+                }))
+                .sort((a, b) => a.id - b.id);
         } catch (error) {
-            console.error('localStorage에서 식단 가져오기 실패:', error);
+            console.error('식단 히스토리 조회 실패:', error);
+            return [];
         }
-        return [];
     };
 
-    // 컴포넌트 마운트 & 페이지 포커스시 식재료 로드
+    // 상품 카탈로그 조회
+    const loadProducts = async () => {
+        try {
+            const res = await getProducts(0, 200);
+            const items = res.data?.content || res.data || [];
+            return items.map((p) => ({
+                ...p,
+                image: p.imageUrl || p.image,
+                mainCategory: p.category,
+            }));
+        } catch (error) {
+            console.error('상품 목록 조회 실패:', error);
+            return [];
+        }
+    };
+
+    const loadAll = async () => {
+        setIsLoading(true);
+        try {
+            const [ingredients, catalogProducts] = await Promise.all([loadIngredients(), loadProducts()]);
+            setRequiredIngredients(ingredients);
+            setProducts(catalogProducts);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     useEffect(() => {
-        loadIngredients();
-        
+        loadAll();
+
         const handleVisibilityChange = () => {
-            if (!document.hidden) {
-                loadIngredients();
-            }
+            if (!document.hidden) loadAll();
         };
-        
-        const handleFocus = () => {
-            loadIngredients();
-        };
-        
+        const handleFocus = () => loadAll();
+
         window.addEventListener('focus', handleFocus);
         document.addEventListener('visibilitychange', handleVisibilityChange);
-        
+
         return () => {
             window.removeEventListener('focus', handleFocus);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
     }, []);
 
-    // 레시피 텍스트에서 식재료 추출
-    const extractIngredientsFromRecipeText = (recipeText, reason) => {
-        const ingredients = [];
-        const recipeSections = recipeText.split(/---레시피 \d+---/).filter(section => section.trim());
-        
-        // 섹션별 처리
-        const processSection = (section) => {
-            const ingredientsMatch = section.match(/📋\s*\*\*필요한 식재료\*\*\s*\n([\s\S]*?)(?=👨‍🍳|💡|---|$)/);
-            if (ingredientsMatch) {
-                const ingredientsText = ingredientsMatch[1].trim();
-                const ingredientLines = ingredientsText.split('\n').filter(line => line.trim());
-                
-                for (const line of ingredientLines) {
-                    const cleaned = line.replace(/^[-•\s*]/, '').trim();
-                    if (cleaned) {
-                        ingredients.push({
-                            key: cleaned.toLowerCase().split(/\s+/)[0],
-                            name: cleaned.split(/\s+/)[0] || cleaned,
-                            amount: cleaned.replace(/^\S+\s*/, '').trim() || '필요량 확인',
-                            reason: reason || '추천 식단',
-                            priority: '보통'
-                        });
-                    }
-                }
-            }
-        };
-        
-        if (recipeSections.length > 0) {
-            recipeSections.forEach(processSection);
-        } else {
-            processSection(recipeText);
-        }
-        
-        return ingredients;
+    // 특정 재료명과 매칭되는 실제 카탈로그 상품 찾기
+    const matchProducts = (name) => {
+        const q = (name || '').toLowerCase();
+        if (!q) return [];
+        return products.filter((p) => {
+            const pname = (p.name || '').toLowerCase();
+            const desc = (p.description || '').toLowerCase();
+            return pname.includes(q) || desc.includes(q) || q.includes(pname);
+        }).slice(0, 4);
     };
 
-    // 식재료 목록 로드
-    const loadIngredients = () => {
-        setIsLoading(true);
-        try {
-            const meals = getMealsFromStorage();
-            let allMeals = meals;
-            
-            // fallback: window.getAllMeals 시도
-            if (meals.length === 0) {
-                allMeals = window.getAllMeals?.() || [];
-            }
-            
-            const ingredientMap = new Map();
-            const dummyIngredientIds = new Set();
-            
-            let dummyId = 1;
-            
-            // 더미 레시피 식재료 추가 (우선순위 높음)
-            if (DUMMY_RECIPE.ingredients) {
-                for (const ing of DUMMY_RECIPE.ingredients) {
-                    const key = ing.name.toLowerCase().trim();
-                    const fullName = ing.name;
-                    const amountText = `${ing.amount} ${ing.unit}`.trim();
-                    
-                    ingredientMap.set(key, {
-                        id: dummyId++,
-                        name: fullName,
-                        amount: amountText,
-                        reason: '추천 레시피',
-                        priority: '높음',
-                        isDummy: true
-                    });
-                    dummyIngredientIds.add(key);
-                }
-            }
-            
-            // 저장된 식단들에서 식재료 추출
-            for (const meal of allMeals) {
-                // ingredients 배열이 있으면 사용
-                if (meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0) {
-                    for (const ing of meal.ingredients) {
-                        const key = (ing.name?.toLowerCase().trim() || ing.toLowerCase().trim()).split(/\s+/)[0];
-                        
-                        if (dummyIngredientIds.has(key)) continue; // 더미 식재료 우선
-                        
-                        const existing = ingredientMap.get(key);
-                        
-                        if (existing) {
-                            // 이미 존재하면 양 합치기
-                            existing.amount = `${existing.amount} + ${ing.amount || ing}`;
-                        } else {
-                            ingredientMap.set(key, {
-                                id: ingredientMap.size + 1,
-                                name: ing.name || ing,
-                                amount: ing.amount || (typeof ing === 'string' ? ing : '필요량 확인'),
-                                reason: meal.recommendReason || '추천 식단',
-                                priority: '보통'
-                            });
-                        }
-                    }
-                } else if (meal.recommendedRecipe) {
-                    // 추천 레시피에서 식재료 추출
-                    const extractedIngredients = extractIngredientsFromRecipeText(
-                        meal.recommendedRecipe, 
-                        meal.recommendReason
-                    );
-                    
-                    for (const ing of extractedIngredients) {
-                        if (dummyIngredientIds.has(ing.key)) continue;
-                        
-                        const existing = ingredientMap.get(ing.key);
-                        
-                        if (existing) {
-                            existing.amount = `${existing.amount} + ${ing.amount}`;
-                        } else {
-                            ingredientMap.set(ing.key, {
-                                id: ingredientMap.size + 1,
-                                ...ing
-                            });
-                        }
-                    }
-                }
-            }
-            
-            // 정렬: 더미 레시피 식재료 우선
-            const ingredients = Array.from(ingredientMap.values());
-            const sortedIngredients = ingredients.sort((a, b) => {
-                if (a.isDummy && !b.isDummy) return -1;
-                if (!a.isDummy && b.isDummy) return 1;
-                return a.id - b.id;
-            });
-            
-            setRequiredIngredients(sortedIngredients);
-        } catch (error) {
-            console.error('식재료 로드 실패:', error);
-            setRequiredIngredients([]);
-        } finally {
-            setIsLoading(false);
-        }
+    // 레시피 탭에서 넘어온 keyword로 관련 상품 직접 필터링
+    const keywordProducts = useMemo(() => {
+        if (!keyword) return [];
+        const keywords = keyword.toLowerCase().split(',').map(k => k.trim()).filter(Boolean);
+        return products.filter((p) => {
+            const pname = (p.name || '').toLowerCase();
+            const desc = (p.description || '').toLowerCase();
+            return keywords.some(k => pname.includes(k) || desc.includes(k));
+        }).slice(0, 8);
+    }, [keyword, products]);
+
+    // keyword와 관련된 식재료만 필터링 (있으면)
+    const filteredIngredients = useMemo(() => {
+        if (!keyword) return requiredIngredients;
+        const q = keyword.toLowerCase();
+        const matched = requiredIngredients.filter((ing) => {
+            const name = ing.name.toLowerCase();
+            return q.includes(name) || name.includes(q);
+        });
+        return matched.length > 0 ? matched : requiredIngredients;
+    }, [keyword, requiredIngredients]);
+
+    // keyword가 바뀌면 매칭되는 재료 자동 선택
+    useEffect(() => {
+        if (!keyword) return;
+        const q = keyword.toLowerCase();
+        const matched = requiredIngredients.find((ing) => {
+            const name = ing.name.toLowerCase();
+            return q.includes(name) || name.includes(q);
+        });
+        if (matched) setSelectedIngredient(matched);
+    }, [keyword, requiredIngredients]);
+
+    const handleClearKeyword = () => {
+        setSearchParams({});
     };
 
     const handleIngredientClick = (ingredient) => {
         setSelectedIngredient(ingredient);
     };
 
-    // 쇼핑몰로 이동
     const handleGoToShopping = (ingredientName) => {
         navigate(`/store?search=${encodeURIComponent(ingredientName)}`);
     };
 
-    // 우선순위별 색상
     const priorityColors = {
         '높음': 'bg-red-100 text-red-700',
         '보통': 'bg-yellow-100 text-yellow-700',
         '낮음': 'bg-green-100 text-green-700'
     };
 
-    // 쇼핑 팁
     const shoppingTips = [
         '유기농이나 친환경 제품을 우선 선택하세요',
         '신선도와 유통기한을 꼭 확인하세요',
@@ -223,145 +174,153 @@ const ShoppingTab = () => {
         '비건 인증이 있는 제품을 확인하세요'
     ];
 
+    const selectedProducts = selectedIngredient ? matchProducts(selectedIngredient.name) : [];
+
     return (
-        <div className="p-6 bg-gray-50 min-h-screen">
-            <div className="max-w-7xl mx-auto">
-                {/* 헤더 */}
-                <div className="mb-6">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">추천 식단 쇼핑 목록</h1>
-                    <p className="text-gray-600">식단 분석 결과를 바탕으로 필요한 식재료를 검색해보세요</p>
+        <div className="w-full flex flex-col gap-6">
+            {/* 헤더 */}
+            <div className="w-full bg-white/90 rounded-[48px] shadow-2xl p-6">
+                <h1 className="text-lg font-semibold font-['Nunito'] text-gray-900 mb-1">추천 식단 쇼핑 목록</h1>
+                <p className="text-sm text-gray-500 font-['Nunito']">분석된 식단을 바탕으로 필요한 식재료와 관련 상품을 찾아보세요</p>
+                <button
+                    onClick={loadAll}
+                    disabled={isLoading}
+                    className="mt-4 px-4 py-2 bg-gradient-to-r from-cyan-500 to-emerald-500 text-white rounded-2xl shadow-lg hover:shadow-xl transition-shadow text-sm font-medium font-['Nunito'] disabled:opacity-50"
+                >
+                    {isLoading ? '로딩 중...' : '새로고침'}
+                </button>
+            </div>
+
+            {/* 레시피에서 넘어온 keyword 필터 배너 */}
+            {keyword && (
+                <div className="w-full bg-teal-50 border border-teal-200 rounded-3xl p-4 flex items-center justify-between">
+                    <p className="text-sm font-['Nunito'] text-teal-700">
+                        🔍 <strong>{keyword}</strong> 관련 재료·상품을 보여드리고 있어요
+                    </p>
                     <button
-                        onClick={loadIngredients}
-                        disabled={isLoading}
-                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-medium disabled:bg-gray-400"
+                        onClick={handleClearKeyword}
+                        className="text-xs px-3 py-1.5 bg-white rounded-full text-teal-600 font-['Nunito'] shadow-sm hover:shadow transition-shadow"
                     >
-                        {isLoading ? '로딩 중...' : '식재료 목록 새로고침'}
+                        필터 해제 ✕
                     </button>
                 </div>
+            )}
 
+            {/* keyword 직접 매칭 상품 */}
+            {keyword && keywordProducts.length > 0 && (
+                <div className="w-full bg-white/90 rounded-[48px] shadow-2xl p-6">
+                    <h2 className="text-base font-semibold font-['Nunito'] text-gray-800 mb-4">🛒 "{keyword}" 관련 상품</h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {keywordProducts.map((product) => (
+                            <ProductCard key={product.id} product={product} />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            <div className="w-full bg-white/90 rounded-[48px] shadow-2xl p-6">
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     {/* 왼쪽: 필요 식재료 목록 */}
                     <div className="lg:col-span-1">
-                        <div className="bg-white rounded-lg shadow p-4">
-                            <h2 className="text-lg font-semibold text-gray-800 mb-4">필요한 식재료</h2>
-                            {isLoading ? (
-                                <div className="text-center py-8">
-                                    <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-500 border-t-transparent"></div>
-                                    <p className="mt-4 text-sm text-gray-600">식재료를 불러오는 중...</p>
-                                </div>
-                            ) : requiredIngredients.length === 0 ? (
-                                <div className="text-center py-8 text-gray-500">
-                                    <p className="text-sm mb-2">저장된 식단이 없습니다.</p>
-                                    <p className="text-xs">식단을 분석하고 저장하면 추천 식재료가 표시됩니다.</p>
-                                </div>
-                            ) : (
-                                <div className="space-y-2 max-h-[693px] overflow-y-auto">
-                                    {requiredIngredients.map((ingredient) => (
-                                        <button
-                                            key={ingredient.id}
-                                            onClick={() => handleIngredientClick(ingredient)}
-                                            className={`w-full text-left p-3 rounded-lg border-2 transition ${
-                                                selectedIngredient?.id === ingredient.id
-                                                    ? 'border-blue-500 bg-blue-50'
-                                                    : 'border-gray-200 hover:border-blue-300'
-                                            }`}
-                                        >
-                                            <div className="flex justify-between items-start mb-1">
-                                                <span className="font-medium text-gray-800">{ingredient.name}</span>
-                                                <span className={`text-xs px-2 py-1 rounded ${priorityColors[ingredient.priority]}`}>
-                                                    {ingredient.priority}
-                                                </span>
-                                            </div>
-                                            <div className="text-sm text-gray-600">{ingredient.amount}</div>
-                                            <div className="text-xs text-gray-500 mt-1">{ingredient.reason}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* 오른쪽: 식재료 상세 정보 */}
-                    <div className="lg:col-span-2">
-                        <div className="bg-white rounded-lg shadow">
-                            {!selectedIngredient ? (
-                                <div className="p-12 text-center text-gray-500">
-                                    <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                                    </svg>
-                                    <p className="text-lg font-medium text-gray-700 mb-2">식재료를 선택해주세요</p>
-                                    <p className="text-sm text-gray-500">왼쪽에서 식재료를 선택하면<br />상세 정보와 구매 링크를 확인할 수 있습니다</p>
-                                </div>
-                            ) : (
-                                <div className="p-6">
-                                    {/* 식재료 헤더 */}
-                                    <div className="mb-6 pb-4 border-b">
-                                        <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                                            {selectedIngredient.name}
-                                        </h2>
-                                        <div className="flex items-center gap-4 text-sm text-gray-600">
-                                            <span>필요량: <strong className="text-gray-800">{selectedIngredient.amount}</strong></span>
-                                            <span>·</span>
-                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                {selectedIngredient.reason}
+                        <h2 className="text-base font-semibold font-['Nunito'] text-gray-800 mb-4">필요한 식재료</h2>
+                        {isLoading ? (
+                            <div className="text-center py-8">
+                                <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-teal-500 border-t-transparent"></div>
+                                <p className="mt-4 text-sm text-gray-600 font-['Nunito']">식재료를 불러오는 중...</p>
+                            </div>
+                        ) : filteredIngredients.length === 0 ? (
+                            <div className="text-center py-8 text-gray-500">
+                                <p className="text-sm mb-2 font-['Nunito']">저장된 식단이 없습니다.</p>
+                                <p className="text-xs font-['Nunito']">식단을 분석하면 추천 식재료가 표시됩니다.</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2 max-h-[560px] overflow-y-auto">
+                                {filteredIngredients.map((ingredient) => (
+                                    <button
+                                        key={ingredient.id}
+                                        onClick={() => handleIngredientClick(ingredient)}
+                                        className={`w-full text-left p-3 rounded-2xl border-2 transition ${
+                                            selectedIngredient?.id === ingredient.id
+                                                ? 'border-teal-400 bg-teal-50'
+                                                : 'border-gray-200 hover:border-teal-200'
+                                        }`}
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="font-medium text-gray-800 font-['Nunito']">{ingredient.name}</span>
+                                            <span className={`text-xs px-2 py-1 rounded-full ${priorityColors[ingredient.priority]}`}>
+                                                {ingredient.priority}
                                             </span>
                                         </div>
-                                    </div>
+                                        <div className="text-sm text-gray-600 font-['Nunito']">{ingredient.amount}</div>
+                                        <div className="text-xs text-gray-500 mt-1 font-['Nunito']">{ingredient.reason}</div>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
 
-                                    <div className="space-y-6">
-                                        {/* 구매하기 */}
-                                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-6 border border-green-200">
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">구매하기</h3>
-                                            <p className="text-sm text-gray-600 mb-4">
-                                                {selectedIngredient.name}을(를) 쇼핑몰에서 검색해보세요.
-                                            </p>
-                                            <button
-                                                onClick={() => handleGoToShopping(selectedIngredient.name)}
-                                                className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium shadow-md hover:shadow-lg"
-                                            >
-                                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                                                </svg>
-                                                쇼핑몰에서 검색하기
-                                            </button>
-                                        </div>
-
-                                        {/* 식재료 정보 */}
-                                        <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-4">식재료 정보</h3>
-                                            <div className="space-y-3">
-                                                {[
-                                                    { label: '식재료명', value: selectedIngredient.name },
-                                                    { label: '필요량', value: selectedIngredient.amount },
-                                                    { label: '추천 이유', value: selectedIngredient.reason }
-                                                ].map((item, index) => (
-                                                    <div key={index} className="flex justify-between items-center">
-                                                        <span className="text-sm text-gray-600">{item.label}</span>
-                                                        <span className="text-sm font-medium text-gray-800">{item.value}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* 쇼핑 팁 */}
-                                        <div className="bg-yellow-50 rounded-xl p-6 border border-yellow-200">
-                                            <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center gap-2">
-                                                <span>💡</span>
-                                                쇼핑 팁
-                                            </h3>
-                                            <ul className="space-y-2 text-sm text-gray-700">
-                                                {shoppingTips.map((tip, index) => (
-                                                    <li key={index} className="flex items-start gap-2">
-                                                        <span className="text-yellow-600 mt-1">•</span>
-                                                        <span>{tip}</span>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
+                    {/* 오른쪽: 식재료 상세 + 관련 상품 */}
+                    <div className="lg:col-span-2">
+                        {!selectedIngredient ? (
+                            <div className="p-12 text-center text-gray-500 bg-gray-50 rounded-3xl h-full flex flex-col items-center justify-center">
+                                <div className="text-4xl mb-4">🥬</div>
+                                <p className="text-base font-medium text-gray-700 mb-2 font-['Nunito']">식재료를 선택해주세요</p>
+                                <p className="text-sm text-gray-500 font-['Nunito']">왼쪽에서 식재료를 선택하면<br />관련 상품을 확인할 수 있습니다</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-6">
+                                <div className="pb-4 border-b border-gray-100">
+                                    <h2 className="text-xl font-bold text-gray-900 mb-2 font-['Nunito']">
+                                        {selectedIngredient.name}
+                                    </h2>
+                                    <div className="flex items-center gap-4 text-sm text-gray-600 font-['Nunito']">
+                                        <span>필요량: <strong className="text-gray-800">{selectedIngredient.amount}</strong></span>
+                                        <span>·</span>
+                                        <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-teal-100 text-teal-800">
+                                            {selectedIngredient.reason}
+                                        </span>
                                     </div>
                                 </div>
-                            )}
-                        </div>
+
+                                {/* 실제 매칭 상품 */}
+                                <div className="bg-gradient-to-r from-teal-50 to-emerald-50 rounded-2xl p-5 border border-teal-100">
+                                    <h3 className="text-sm font-semibold text-gray-800 mb-4 font-['Nunito']">🛒 관련 상품</h3>
+                                    {selectedProducts.length > 0 ? (
+                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            {selectedProducts.map((product) => (
+                                                <ProductCard key={product.id} product={product} />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-center py-4">
+                                            <p className="text-sm text-gray-500 font-['Nunito'] mb-3">등록된 상품 중 일치하는 항목이 없어요.</p>
+                                            <button
+                                                onClick={() => handleGoToShopping(selectedIngredient.name)}
+                                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-cyan-500 to-emerald-500 text-white rounded-2xl hover:shadow-lg transition-shadow font-medium text-sm font-['Nunito']"
+                                            >
+                                                🔍 스토어에서 검색하기
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* 쇼핑 팁 */}
+                                <div className="bg-yellow-50 rounded-2xl p-5 border border-yellow-200">
+                                    <h3 className="text-sm font-semibold text-gray-800 mb-3 flex items-center gap-2 font-['Nunito']">
+                                        <span>💡</span>
+                                        쇼핑 팁
+                                    </h3>
+                                    <ul className="space-y-2 text-sm text-gray-700 font-['Nunito']">
+                                        {shoppingTips.map((tip, index) => (
+                                            <li key={index} className="flex items-start gap-2">
+                                                <span className="text-yellow-600 mt-1">•</span>
+                                                <span>{tip}</span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

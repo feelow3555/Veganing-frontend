@@ -59,14 +59,14 @@ function ChallengeMain() {
                     })
                 ]);
 
-                if (!challengeResponse || !challengeResponse.userChallenge) {
+                if (!challengeResponse || !challengeResponse.data) {
                     console.log('진행 중인 챌린지가 없습니다.');
                     navigate('/challenge/choice');
                     return;
                 }
 
-                setChallengeData(challengeResponse.userChallenge);
-                setStatsData(statsResponse?.stats);
+                setChallengeData(challengeResponse.data);
+                setStatsData(statsResponse?.data);
             } catch (error) {
                 console.error('데이터 조회 실패:', error);
                 navigate('/challenge/choice');

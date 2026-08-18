@@ -1,5 +1,6 @@
 // 백엔드 API 호출 함수들
-import { API_ENDPOINTS, apiClient } from '../config/api';
+import { apiClient } from '../config/api';
+import API_BASE_URL from '../config/api';
 
 // ==========================================
 // 인증 API
@@ -11,7 +12,7 @@ import { API_ENDPOINTS, apiClient } from '../config/api';
  * @returns {Promise<Object>} - { message, user, token }
  */
 export const signup = async (userData) => {
-  return await apiClient.post(API_ENDPOINTS.AUTH.SIGNUP, userData);
+  return await apiClient.post(`${API_BASE_URL}/api/auth/signup`, userData);
 };
 
 /**
@@ -20,7 +21,7 @@ export const signup = async (userData) => {
  * @returns {Promise<Object>} - { message, user, token }
  */
 export const login = async (credentials) => {
-  return await apiClient.post(API_ENDPOINTS.AUTH.LOGIN, credentials);
+  return await apiClient.post(`${API_BASE_URL}/api/auth/login`, credentials);
 };
 
 /**
@@ -29,7 +30,7 @@ export const login = async (credentials) => {
  * @returns {Promise<Object>} - { user }
  */
 export const getMyProfile = async (token) => {
-  return await apiClient.get(API_ENDPOINTS.AUTH.ME, token);
+  return await apiClient.get(`${API_BASE_URL}/api/auth/me`, token);
 };
 
 /**
@@ -39,7 +40,7 @@ export const getMyProfile = async (token) => {
  * @returns {Promise<Object>} - { message, user }
  */
 export const updateProfile = async (updateData, token) => {
-  return await apiClient.put(API_ENDPOINTS.AUTH.PROFILE, updateData, token);
+  return await apiClient.put(`${API_BASE_URL}/api/auth/profile`, updateData, token);
 };
 
 // ==========================================
@@ -53,7 +54,7 @@ export const updateProfile = async (updateData, token) => {
  * @returns {Promise<Object>} - { message, challenge }
  */
 export const startChallenge = async (challengeData, token) => {
-  return await apiClient.post(API_ENDPOINTS.CHALLENGE.START, challengeData, token);
+  return await apiClient.post(`${API_BASE_URL}/api/challenge/start`, challengeData, token);
 };
 
 /**
@@ -62,7 +63,7 @@ export const startChallenge = async (challengeData, token) => {
  * @returns {Promise<Object>} - { challenge }
  */
 export const getCurrentChallenge = async (token) => {
-  return await apiClient.get(API_ENDPOINTS.CHALLENGE.CURRENT, token);
+  return await apiClient.get(`${API_BASE_URL}/api/challenge/current`, token);
 };
 
 /**
@@ -71,7 +72,7 @@ export const getCurrentChallenge = async (token) => {
  * @returns {Promise<Object>} - { challenges }
  */
 export const getChallengeHistory = async (token) => {
-  return await apiClient.get(API_ENDPOINTS.CHALLENGE.HISTORY, token);
+  return await apiClient.get(`${API_BASE_URL}/api/challenge/history`, token);
 };
 
 /**
@@ -80,7 +81,7 @@ export const getChallengeHistory = async (token) => {
  * @returns {Promise<Object>} - { stats }
  */
 export const getChallengeStats = async (token) => {
-  return await apiClient.get(API_ENDPOINTS.CHALLENGE.STATS, token);
+  return await apiClient.get(`${API_BASE_URL}/api/challenge/stats`, token);
 };
 
 /**
@@ -91,11 +92,7 @@ export const getChallengeStats = async (token) => {
  * @returns {Promise<Object>} - { message, challenge }
  */
 export const updateChallengeProgress = async (challengeId, progress, token) => {
-  return await apiClient.put(
-    API_ENDPOINTS.CHALLENGE.PROGRESS(challengeId),
-    { progress },
-    token
-  );
+  return await apiClient.put(`${API_BASE_URL}/api/challenge/${challengeId}/progress`, { progress }, token);
 };
 
 /**
@@ -105,7 +102,7 @@ export const updateChallengeProgress = async (challengeId, progress, token) => {
  * @returns {Promise<Object>} - { message, challenge }
  */
 export const quitChallenge = async (challengeId, token) => {
-  return await apiClient.put(API_ENDPOINTS.CHALLENGE.QUIT(challengeId), {}, token);
+  return await apiClient.put(`${API_BASE_URL}/api/challenge/${challengeId}/quit`, {}, token);
 };
 
 /**
@@ -115,7 +112,7 @@ export const quitChallenge = async (challengeId, token) => {
  * @returns {Promise<Object>} - { message, user }
  */
 export const addPoints = async (points = 200, token) => {
-  return await apiClient.post(API_ENDPOINTS.CHALLENGE.ADD_POINTS, { points }, token);
+  return await apiClient.post(`${API_BASE_URL}/api/challenge/add-points`, { points, reason: '식단 저장' }, token);
 };
 
 // ==========================================
@@ -129,7 +126,7 @@ export const addPoints = async (points = 200, token) => {
  */
 export const getPosts = async (params = {}) => {
   const queryString = new URLSearchParams(params).toString();
-  const url = queryString ? `${API_ENDPOINTS.COMMUNITY.POSTS}?${queryString}` : API_ENDPOINTS.COMMUNITY.POSTS;
+  const url = queryString ? `${API_BASE_URL}/api/community/posts?${queryString}` : `${API_BASE_URL}/api/community/posts`;
   return await apiClient.get(url);
 };
 
@@ -139,7 +136,7 @@ export const getPosts = async (params = {}) => {
  * @returns {Promise<Object>} - { post }
  */
 export const getPostDetail = async (postId) => {
-  return await apiClient.get(API_ENDPOINTS.COMMUNITY.POST_DETAIL(postId));
+  return await apiClient.get(`${API_BASE_URL}/api/community/posts/${postId}`);
 };
 
 /**
@@ -149,7 +146,7 @@ export const getPostDetail = async (postId) => {
  * @returns {Promise<Object>} - { message, post }
  */
 export const createPost = async (postData, token) => {
-  return await apiClient.post(API_ENDPOINTS.COMMUNITY.POSTS, postData, token);
+  return await apiClient.post(`${API_BASE_URL}/api/community/posts`, postData, token);
 };
 
 /**
@@ -160,7 +157,7 @@ export const createPost = async (postData, token) => {
  * @returns {Promise<Object>} - { message, post }
  */
 export const updatePost = async (postId, postData, token) => {
-  return await apiClient.put(API_ENDPOINTS.COMMUNITY.POST_DETAIL(postId), postData, token);
+  return await apiClient.put(`${API_BASE_URL}/api/community/posts/${postId}`, postData, token);
 };
 
 /**
@@ -170,7 +167,7 @@ export const updatePost = async (postId, postData, token) => {
  * @returns {Promise<Object>} - { message }
  */
 export const deletePost = async (postId, token) => {
-  return await apiClient.delete(API_ENDPOINTS.COMMUNITY.POST_DETAIL(postId), token);
+  return await apiClient.delete(`${API_BASE_URL}/api/community/posts/${postId}`, token);
 };
 
 /**
@@ -180,7 +177,7 @@ export const deletePost = async (postId, token) => {
  * @returns {Promise<Object>} - { message, likes }
  */
 export const likePost = async (postId, token) => {
-  return await apiClient.post(API_ENDPOINTS.COMMUNITY.POST_LIKE(postId), {}, token);
+  return await apiClient.post(`${API_BASE_URL}/api/community/posts/${postId}/like`, {}, token);
 };
 
 /**
@@ -189,7 +186,7 @@ export const likePost = async (postId, token) => {
  * @returns {Promise<Object>} - { comments }
  */
 export const getComments = async (postId) => {
-  return await apiClient.get(API_ENDPOINTS.COMMUNITY.POST_COMMENTS(postId));
+  return await apiClient.get(`${API_BASE_URL}/api/community/posts/${postId}/comments`);
 };
 
 /**
@@ -200,7 +197,7 @@ export const getComments = async (postId) => {
  * @returns {Promise<Object>} - { message, comment }
  */
 export const createComment = async (postId, commentData, token) => {
-  return await apiClient.post(API_ENDPOINTS.COMMUNITY.POST_COMMENTS(postId), commentData, token);
+  return await apiClient.post(`${API_BASE_URL}/api/community/posts/${postId}/comments`, commentData, token);
 };
 
 /**
@@ -210,7 +207,7 @@ export const createComment = async (postId, commentData, token) => {
  * @returns {Promise<Object>} - { message }
  */
 export const deleteComment = async (commentId, token) => {
-  return await apiClient.delete(API_ENDPOINTS.COMMUNITY.COMMENT_DELETE(commentId), token);
+  return await apiClient.delete(`${API_BASE_URL}/api/community/comments/${commentId}`, token);
 };
 
 /**
@@ -218,7 +215,7 @@ export const deleteComment = async (commentId, token) => {
  * @returns {Promise<Object>} - { challenges }
  */
 export const getCommunityChallenges = async () => {
-  return await apiClient.get(API_ENDPOINTS.COMMUNITY.CHALLENGES);
+  return { data: [] }; // Spring Boot 미구현
 };
 
 /**
@@ -227,7 +224,7 @@ export const getCommunityChallenges = async () => {
  * @returns {Promise<Object>} - { challenge }
  */
 export const getCommunityChallenge = async (challengeId) => {
-  return await apiClient.get(API_ENDPOINTS.COMMUNITY.CHALLENGE_DETAIL(challengeId));
+  return { data: null }; // Spring Boot 미구현
 };
 
 /**
@@ -237,7 +234,7 @@ export const getCommunityChallenge = async (challengeId) => {
  * @returns {Promise<Object>} - { message, userChallenge }
  */
 export const joinCommunityChallenge = async (challengeId, token) => {
-  return await apiClient.post(API_ENDPOINTS.COMMUNITY.CHALLENGE_JOIN(challengeId), {}, token);
+  return { data: null }; // Spring Boot 미구현
 };
 
 /**
@@ -248,7 +245,7 @@ export const joinCommunityChallenge = async (challengeId, token) => {
  */
 export const getMyChallenges = async (params = {}, token) => {
   const queryString = new URLSearchParams(params).toString();
-  const url = queryString ? `${API_ENDPOINTS.COMMUNITY.MY_CHALLENGES}?${queryString}` : API_ENDPOINTS.COMMUNITY.MY_CHALLENGES;
+  const url = `${API_BASE_URL}/api/challenge/history`;
   return await apiClient.get(url, token);
 };
 
@@ -321,5 +318,57 @@ export const logout = () => {
  * @returns {Promise<Object>} - { images, participants, successRate, satisfaction }
  */
 export const getHomeHeroData = async (token) => {
-  return await apiClient.get(API_ENDPOINTS.HOME.HERO, token);
+  return await apiClient.get(`${API_BASE_URL}/api/home/hero`, token);
+};
+
+// ==========================================
+// MEAL API
+// ==========================================
+export const getUploadUrl = (token) => apiClient.get(`${API_BASE_URL}/api/meal/upload-url`, token);
+export const analyzeMeal = (data, token) => apiClient.post(`${API_BASE_URL}/api/meal`, data, token);
+export const getMeal = (mealId, token) => apiClient.get(`${API_BASE_URL}/api/meal/${mealId}`, token);
+export const getMealHistory = (token) => apiClient.get(`${API_BASE_URL}/api/meal/history`, token);
+export const getRecommend = (token) => apiClient.get(`${API_BASE_URL}/api/meal/recommend`, token);
+
+// ==========================================
+// RECIPE API
+// ==========================================
+export const getTodayRecipes = (token) => apiClient.get(`${API_BASE_URL}/api/recipe/today`, token);
+
+export const uploadToS3 = async (presignedUrl, file) => {
+  const response = await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': file.type }, body: file });
+  if (!response.ok) throw new Error('S3 업로드 실패');
+};
+
+// ==========================================
+// CARBON API
+// ==========================================
+export const getCarbonStats = (token) => apiClient.get(`${API_BASE_URL}/api/carbon/stats`, token);
+export const getCarbonToday = (token) => apiClient.get(`${API_BASE_URL}/api/carbon/today`, token);
+export const getCarbonHistory = (days = 7, token) => apiClient.get(`${API_BASE_URL}/api/carbon/history?days=${days}`, token);
+
+// ==========================================
+// PRODUCT API
+// ==========================================
+export const getProducts = (page = 0, size = 20) => apiClient.get(`${API_BASE_URL}/api/product?page=${page}&size=${size}`);
+export const getProduct = (id) => apiClient.get(`${API_BASE_URL}/api/product/${id}`);
+
+// ==========================================
+// CART API
+// ==========================================
+export const getCart = (token) => apiClient.get(`${API_BASE_URL}/api/cart`, token);
+export const addCartItem = (data, token) => apiClient.post(`${API_BASE_URL}/api/cart`, data, token);
+export const updateCartItem = (cartItemId, data, token) => apiClient.put(`${API_BASE_URL}/api/cart/${cartItemId}`, data, token);
+export const removeCartItem = (cartItemId, token) => apiClient.delete(`${API_BASE_URL}/api/cart/${cartItemId}`, token);
+
+// ==========================================
+// ORDER API
+// ==========================================
+export const createOrder = (data, token) => apiClient.post(`${API_BASE_URL}/api/order`, data, token);
+export const getMyOrders = (token) => apiClient.get(`${API_BASE_URL}/api/order`, token);
+export const getOrder = (orderId, token) => apiClient.get(`${API_BASE_URL}/api/order/${orderId}`, token);
+
+// 좋아요 순 게시글 (레시피 랭킹용)
+export const getPostsByLikes = async (size = 10) => {
+  return await apiClient.get(`${API_BASE_URL}/api/community/posts?page=0&size=${size}&sort=likeCount,desc`);
 };

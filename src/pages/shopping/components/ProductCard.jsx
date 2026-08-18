@@ -10,13 +10,27 @@ function ProductCard({ product }) {
 
     const handleBuyNow = (e) => {
         e.preventDefault();
-        e.stopPropagation(); 
+        e.stopPropagation();
+
+        const price = product.price || 0;
+        const shippingFee = price >= 30000 ? 0 : 3000;
 
         navigate("/order", {
             state: {
-                productId: product.id,
-                quantity: 1
-            }
+                items: [
+                    {
+                        id: product.id,
+                        productId: product.id,
+                        name: product.name,
+                        image: product.image,
+                        price,
+                        quantity: 1,
+                    },
+                ],
+                totalPrice: price,
+                shippingFee,
+                finalAmount: price + shippingFee,
+            },
         });
     };
     

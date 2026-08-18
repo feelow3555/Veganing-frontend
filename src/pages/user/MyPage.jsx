@@ -156,8 +156,8 @@ export default function MyPage() {
         }
 
         const response = await getMyProfile(token);
-        if (response.user) {
-          const user = response.user;
+        if (response.data) {
+          const user = response.data;
           const joinDate = user.createdAt 
             ? new Date(user.createdAt).toLocaleDateString("ko-KR", { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\./g, '.').replace(/\s/g, '')
             : "";
@@ -206,12 +206,12 @@ export default function MyPage() {
         if (!token) return;
 
         const response = await getChallengeStats(token);
-        if (response.stats) {
+        if (response.data) {
           setStats(prev => ({
             ...prev,
-            totalDays: response.stats.currentStreak || 0,
-            consecutiveDays: response.stats.currentStreak || 0,
-            challengesCompleted: response.stats.completed || 0,
+            totalDays: response.data.currentStreak || 0,
+            consecutiveDays: response.data.currentStreak || 0,
+            challengesCompleted: response.data.completed || 0,
           }));
         }
       } catch (error) {
@@ -248,8 +248,9 @@ export default function MyPage() {
         const token = getToken();
         if (!token) return;
 
-        const response = await getPosts({ limit: 100 });
-        if (response.posts) {
+        const response = await getPosts({ page: 0, size: 100 });
+        const posts = response.data?.content || [];
+        if (posts.length > 0) {
           let userResponse;
           try {
             userResponse = await getMyProfile(token);
@@ -265,51 +266,46 @@ export default function MyPage() {
             }
             throw error;
           }
-          const currentUserId = userResponse?.user?.id;
+          const currentUserId = userResponse?.data?.userId;
+          const currentNickname = userResponse?.data?.nickname;
 
           if (currentUserId) {
-            const myPosts = response.posts
-              .filter(post => post.author?.id === currentUserId)
+            // 백엔드 게시글 응답에 작성자 id가 없어 닉네임으로 임시 매칭 (추후 authorId 필드 추가 필요)
+            const myPosts = posts
+              .filter(post => post.nickname === currentNickname)
               .slice(0, 5)
               .map(post => ({
                 id: post.id,
                 date: new Date(post.createdAt).toLocaleDateString("ko-KR", { year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\./g, '.').replace(/\s/g, ''),
-                title: post.content.length > 20 ? post.content.substring(0, 20) + "..." : post.content,
-                likes: post.likes || 0,
+                title: (post.content || post.title || "").length > 20 ? (post.content || post.title).substring(0, 20) + "..." : (post.content || post.title),
+                likes: post.likeCount || 0,
                 comments: post.commentCount || 0,
               }));
-            
+
             setRecentPosts(myPosts);
             setStats(prev => ({
               ...prev,
-              postsCount: response.posts.filter(post => post.author?.id === currentUserId).length,
+              postsCount: posts.filter(post => post.nickname === currentNickname).length,
             }));
 
             const userLikesMap = new Map();
-            
-            response.posts.forEach(post => {
-              if (post.author?.id && post.author?.nickname) {
-                const userId = post.author.id;
-                const currentLikes = userLikesMap.get(userId) || 0;
-                userLikesMap.set(userId, currentLikes + (post.likes || 0));
+
+            posts.forEach(post => {
+              if (post.nickname) {
+                const currentLikes = userLikesMap.get(post.nickname) || 0;
+                userLikesMap.set(post.nickname, currentLikes + (post.likeCount || 0));
               }
             });
 
             const rankingsData = Array.from(userLikesMap.entries())
-              .map(([userId, totalLikes]) => {
-                const userPost = response.posts.find(post => post.author?.id === userId);
-                if (!userPost || !userPost.author) return null;
-
-                return {
-                  userId: userId,
-                  name: userPost.author.nickname || "익명",
-                  region: "강남구",
-                  score: totalLikes,
-                  avatar: userPost.author.profileImage || userPost.author.nickname?.charAt(0) || "?",
-                  isMe: userId === currentUserId,
-                };
-              })
-              .filter(item => item !== null)
+              .map(([nickname, totalLikes]) => ({
+                userId: nickname,
+                name: nickname || "익명",
+                region: "강남구",
+                score: totalLikes,
+                avatar: nickname?.charAt(0) || "?",
+                isMe: nickname === currentNickname,
+              }))
               .sort((a, b) => b.score - a.score)
               .slice(0, 5)
               .map((item, index) => ({
@@ -355,7 +351,7 @@ export default function MyPage() {
 
       const response = await updateProfile(updateData, token);
       
-      if (response.user) {
+      if (response.data) {
         setUserData({ ...editData });
         setIsEditing(false);
         alert("프로필이 수정되었습니다.");

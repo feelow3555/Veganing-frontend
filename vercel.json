@@ -1,8 +1,12 @@
 {
-    "rewrites": [
-        {
-            "source": "/api/:path*",
-            "destination": "http://13.55.162.161:8080/api/:path*"
-        }
-    ]
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "http://13.55.162.161:8080/api/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
+    }
+  ]
 }
